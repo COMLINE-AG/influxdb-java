@@ -72,6 +72,10 @@ public class InfluxDBMapper extends InfluxDBResultMapper {
 
         Object value = field.get(model);
 
+        if (value == null) {
+          continue;
+        }
+
         if (column.tag()) {
           /** Tags are strings either way. */
           pointBuilder.tag(columnName, value.toString());

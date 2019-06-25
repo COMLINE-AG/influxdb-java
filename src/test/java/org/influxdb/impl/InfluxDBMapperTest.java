@@ -56,6 +56,17 @@ public class InfluxDBMapperTest {
   }
 
   @Test
+  public void testNulledTag() {
+    ServerMeasure serverMeasure = createMeasure();
+    serverMeasure.setName(null);
+    influxDBMapper.save(serverMeasure);
+
+
+    List<ServerMeasure> persistedMeasures = influxDBMapper.query(new Query("SELECT * FROM server_measure",UDP_DATABASE),ServerMeasure.class);
+    Assert.assertTrue(persistedMeasures.size()>0);
+  }
+
+  @Test
   public void testIllegalField() {
     InvalidMeasure invalidMeasure = new InvalidMeasure();
     invalidMeasure.setVal(new BigDecimal("2.3"));
@@ -228,6 +239,45 @@ public class InfluxDBMapperTest {
 
     public void setTime(long time) {
       this.time = time;
+    }
+  }
+
+  @Measurement(name = "nulltag_measure", database = UDP_DATABASE)
+  static class NullTagMeasure {
+
+    @Column(name = "nulled", tag = true)
+    private String nulled;
+
+    @Column(name = "not_nulled", tag = true)
+    private String notNulled;
+
+    @Column(name = "illegal_val")
+    private Double val;
+
+    public Double getVal() {
+      return val;
+    }
+
+    public void setVal(Double val) {
+      this.val = val;
+    }
+
+    public String getNulled() {
+      return nulled;
+    }
+
+    public NullTagMeasure setNulled(String nulled) {
+      this.nulled = nulled;
+      return this;
+    }
+
+    public String getNotNulled() {
+      return notNulled;
+    }
+
+    public NullTagMeasure setNotNulled(String notNulled) {
+      this.notNulled = notNulled;
+      return this;
     }
   }
 
