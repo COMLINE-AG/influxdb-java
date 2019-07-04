@@ -56,14 +56,39 @@ public class InfluxDBMapperTest {
   }
 
   @Test
-  public void testNulledTag() {
-    ServerMeasure serverMeasure = createMeasure();
-    serverMeasure.setName(null);
-    influxDBMapper.save(serverMeasure);
+  public void testNullableTag() {
+    NullContainingMeasure nullContainingMeasure = createNullContainingMeasure();
+    influxDBMapper.save(nullContainingMeasure);
 
-
-    List<ServerMeasure> persistedMeasures = influxDBMapper.query(new Query("SELECT * FROM server_measure",UDP_DATABASE),ServerMeasure.class);
+    List<NullContainingMeasure> persistedMeasures = influxDBMapper.query(new Query("SELECT * FROM nulltag_measure",UDP_DATABASE), NullContainingMeasure.class);
     Assert.assertTrue(persistedMeasures.size()>0);
+  }
+
+  @Test
+  public void testNonNullableTag() {
+    NullContainingMeasure nullContainingMeasure = createNullContainingMeasure();
+    nullContainingMeasure.setName(null);
+    assertThrows(
+        NullPointerException.class,
+        () -> influxDBMapper.save(nullContainingMeasure));
+  }
+
+  @Test
+  public void testNulledValue() {
+    NullContainingMeasure nullContainingMeasure = createNullContainingMeasure();
+    influxDBMapper.save(nullContainingMeasure);
+
+    List<NullContainingMeasure> persistedMeasures = influxDBMapper.query(new Query("SELECT * FROM nulltag_measure",UDP_DATABASE), NullContainingMeasure.class);
+    Assert.assertTrue(persistedMeasures.size()>0);
+  }
+
+  @Test
+  public void testNoNullableValue() {
+    NullContainingMeasure nullContainingMeasure = createNullContainingMeasure();
+    nullContainingMeasure.setAnotherval(null);
+    assertThrows(
+        NullPointerException.class,
+        () -> influxDBMapper.save(nullContainingMeasure));
   }
 
   @Test
@@ -243,16 +268,19 @@ public class InfluxDBMapperTest {
   }
 
   @Measurement(name = "nulltag_measure", database = UDP_DATABASE)
-  static class NullTagMeasure {
+  static class NullContainingMeasure {
 
-    @Column(name = "nulled", tag = true)
+    @Column(name = "nulled", tag = true, nullable = true)
     private String nulled;
 
-    @Column(name = "not_nulled", tag = true)
-    private String notNulled;
+    @Column(name = "name", tag = true)
+    private String name;
 
-    @Column(name = "illegal_val")
+    @Column(name = "val", nullable = true)
     private Double val;
+
+    @Column(name = "anotherval")
+    private Double anotherval;
 
     public Double getVal() {
       return val;
@@ -262,21 +290,30 @@ public class InfluxDBMapperTest {
       this.val = val;
     }
 
+    public Double getAnotherval() {
+      return anotherval;
+    }
+
+    public NullContainingMeasure setAnotherval(Double anotherval) {
+      this.anotherval = anotherval;
+      return this;
+    }
+
     public String getNulled() {
       return nulled;
     }
 
-    public NullTagMeasure setNulled(String nulled) {
+    public NullContainingMeasure setNulled(String nulled) {
       this.nulled = nulled;
       return this;
     }
 
-    public String getNotNulled() {
-      return notNulled;
+    public String getName() {
+      return name;
     }
 
-    public NullTagMeasure setNotNulled(String notNulled) {
-      this.notNulled = notNulled;
+    public NullContainingMeasure setName(String name) {
+      this.name = name;
       return this;
     }
   }
@@ -290,6 +327,15 @@ public class InfluxDBMapperTest {
     serverMeasure.setMemoryUtilization(new Double(34.5));
     serverMeasure.setIp("19.087.4.5");
     return serverMeasure;
+  }
+
+  private NullContainingMeasure createNullContainingMeasure() {
+    NullContainingMeasure measure = new NullContainingMeasure();
+    measure.setName("howie");
+    measure.setNulled(null);
+    measure.setVal(5.56d);
+    measure.setAnotherval(4.32d);
+    return measure;
   }
 
 }

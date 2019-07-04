@@ -272,6 +272,10 @@ public class Point {
           return;
         }
 
+        if (column.nullable() && fieldValue == null) {
+          return;
+        }
+
         if (column.tag()) {
           this.tags.put(fieldName, (String) fieldValue);
         } else {

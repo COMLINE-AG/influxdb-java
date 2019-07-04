@@ -72,7 +72,7 @@ public class InfluxDBMapper extends InfluxDBResultMapper {
 
         Object value = field.get(model);
 
-        if (value == null) {
+        if (column.nullable() && value == null) {
           continue;
         }
 

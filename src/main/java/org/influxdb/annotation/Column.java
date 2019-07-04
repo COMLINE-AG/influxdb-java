@@ -35,4 +35,6 @@ public @interface Column {
   String name();
 
   boolean tag() default false;
+
+  boolean nullable() default false;
 }
