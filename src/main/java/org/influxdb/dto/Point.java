@@ -23,7 +23,6 @@ import org.influxdb.impl.Preconditions;
  * Representation of a InfluxDB database Point.
  *
  * @author stefan.majer [at] gmail.com
- *
  */
 public class Point {
   private String measurement;
@@ -33,17 +32,17 @@ public class Point {
   private Map<String, Object> fields;
   private static final int MAX_FRACTION_DIGITS = 340;
   private static final ThreadLocal<NumberFormat> NUMBER_FORMATTER =
-          ThreadLocal.withInitial(() -> {
-            NumberFormat numberFormat = NumberFormat.getInstance(Locale.ENGLISH);
-            numberFormat.setMaximumFractionDigits(MAX_FRACTION_DIGITS);
-            numberFormat.setGroupingUsed(false);
-            numberFormat.setMinimumFractionDigits(1);
-            return numberFormat;
-          });
+      ThreadLocal.withInitial(() -> {
+        NumberFormat numberFormat = NumberFormat.getInstance(Locale.ENGLISH);
+        numberFormat.setMaximumFractionDigits(MAX_FRACTION_DIGITS);
+        numberFormat.setGroupingUsed(false);
+        numberFormat.setMinimumFractionDigits(1);
+        return numberFormat;
+      });
 
   private static final int DEFAULT_STRING_BUILDER_SIZE = 1024;
   private static final ThreadLocal<StringBuilder> CACHED_STRINGBUILDERS =
-          ThreadLocal.withInitial(() -> new StringBuilder(DEFAULT_STRING_BUILDER_SIZE));
+      ThreadLocal.withInitial(() -> new StringBuilder(DEFAULT_STRING_BUILDER_SIZE));
 
   Point() {
   }
@@ -295,14 +294,20 @@ public class Point {
      * @return the newly created Point.
      */
     public Point build() {
+      return this.build(true);
+    }
+
+    public Point build(boolean checkFieldSize) {
       Preconditions.checkNonEmptyString(this.measurement, "measurement");
-      Preconditions.checkPositiveNumber(this.fields.size(), "fields size");
+      if (checkFieldSize) {
+        Preconditions.checkPositiveNumber(this.fields.size(), "fields size");
+      }
       Point point = new Point();
       point.setFields(this.fields);
       point.setMeasurement(this.measurement);
       if (this.time != null) {
-          point.setTime(this.time);
-          point.setPrecision(this.precision);
+        point.setTime(this.time);
+        point.setPrecision(this.precision);
       }
       point.setTags(this.tags);
       return point;
@@ -373,10 +378,10 @@ public class Point {
     }
     Point point = (Point) o;
     return Objects.equals(measurement, point.measurement)
-            && Objects.equals(tags, point.tags)
-            && Objects.equals(time, point.time)
-            && precision == point.precision
-            && Objects.equals(fields, point.fields);
+        && Objects.equals(tags, point.tags)
+        && Objects.equals(time, point.time)
+        && precision == point.precision
+        && Objects.equals(fields, point.fields);
   }
 
   @Override
@@ -407,6 +412,50 @@ public class Point {
     builder.append("]");
     return builder.toString();
   }
+
+  /**
+   *  create a query string to delete a series
+   */
+  public String deleteQuery(String timeRelationalOperator) {
+    if(timeRelationalOperator == null) {
+      if(this.time != null) {
+        throw new IllegalArgumentException("Expecting time to be null");
+      }
+    } else if(this.tags.size() == 0 && this.time == null){
+      throw new IllegalArgumentException("Expecting at least one tag or time");
+    }
+
+    StringBuilder sb = CACHED_STRINGBUILDERS.get();
+    sb.setLength(0);
+
+    sb.append("DELETE FROM ");
+    escapeKey(sb, measurement);
+    sb.append(" WHERE ");
+
+    boolean addAnd = false;
+
+    if(this.time != null && timeRelationalOperator != null){
+      sb.append("time");
+      sb.append(timeRelationalOperator);
+      formatedTime(sb, null);
+      addAnd = true;
+    }
+
+    for (Entry<String, String> tag : this.tags.entrySet()) {
+      if(addAnd){
+        sb.append(" AND ");
+      }
+      addAnd = true;
+
+      escapeKey(sb, tag.getKey());
+      sb.append("=\'");
+      escapeKey(sb, tag.getValue());
+      sb.append('\'');
+    }
+
+    return sb.toString();
+  }
+
 
   /**
    * calculate the lineprotocol entry for a single Point.

@@ -46,49 +46,15 @@ public class InfluxDBMapper extends InfluxDBResultMapper {
   }
 
   public <T> void save(final T model) {
-    throwExceptionIfMissingAnnotation(model.getClass());
-    cacheMeasurementClass(model.getClass());
-
-    ConcurrentMap<String, Field> colNameAndFieldMap = getColNameAndFieldMap(model.getClass());
+    Class<?> modelType = model.getClass();
+    throwExceptionIfMissingAnnotation(modelType);
+    cacheMeasurementClass(modelType);
 
     try {
-      Class<?> modelType = model.getClass();
-      String measurement = getMeasurementName(modelType);
+      Point point = createPoint(model, true, true);
+
       String database = getDatabaseName(modelType);
       String retentionPolicy = getRetentionPolicy(modelType);
-      TimeUnit timeUnit = getTimeUnit(modelType);
-      long time = timeUnit.convert(System.currentTimeMillis(), TimeUnit.MILLISECONDS);
-      Point.Builder pointBuilder = Point.measurement(measurement).time(time, timeUnit);
-
-      for (String key : colNameAndFieldMap.keySet()) {
-        Field field = colNameAndFieldMap.get(key);
-        Column column = field.getAnnotation(Column.class);
-        String columnName = column.name();
-        Class<?> fieldType = field.getType();
-
-        if (!field.isAccessible()) {
-          field.setAccessible(true);
-        }
-
-        Object value = field.get(model);
-
-        if (column.nullable() && value == null) {
-          continue;
-        }
-
-        if (column.tag()) {
-          /** Tags are strings either way. */
-          pointBuilder.tag(columnName, value.toString());
-        } else if ("time".equals(columnName)) {
-          if (value != null) {
-            setTime(pointBuilder, fieldType, timeUnit, value);
-          }
-        } else {
-          setField(pointBuilder, fieldType, columnName, value);
-        }
-      }
-
-      Point point = pointBuilder.build();
 
       if ("[unassigned]".equals(database)) {
         influxDB.write(point);
@@ -99,6 +65,80 @@ public class InfluxDBMapper extends InfluxDBResultMapper {
     } catch (IllegalAccessException e) {
       throw new InfluxDBMapperException(e);
     }
+  }
+
+  public <T> void deleteMeasurementsByTagsWithoutTime(final T model) {
+    delete(model, null);
+  }
+
+  public <T> void deleteMeasurementsByTagsSinceTime(final T model) {
+    delete(model, ">");
+  }
+
+  public <T> void deleteMeasurementsByTagsUntilTime(final T model) {
+    delete(model, "<");
+  }
+
+  private <T> void delete(final T model, String timeRelationalOperator) {
+    Class<?> modelType = model.getClass();
+    throwExceptionIfMissingAnnotation(modelType);
+    cacheMeasurementClass(modelType);
+
+    try {
+      String database = getDatabaseName(modelType);
+      Point point = createPoint(model, false, false);
+      Query query = new Query(point.deleteQuery(timeRelationalOperator), database);
+
+      influxDB.query(query);
+
+    } catch (IllegalAccessException e) {
+      throw new InfluxDBMapperException(e);
+    }
+  }
+
+  public <T> Point createPoint(final T model, boolean setDefaultTime, boolean includeFields) throws IllegalAccessException {
+    Class<?> modelType = model.getClass();
+    ConcurrentMap<String, Field> colNameAndFieldMap = getColNameAndFieldMap(modelType);
+    String measurement = getMeasurementName(modelType);
+    TimeUnit timeUnit = getTimeUnit(modelType);
+    Point.Builder pointBuilder = Point.measurement(measurement);
+
+    if(setDefaultTime){
+      long time = timeUnit.convert(System.currentTimeMillis(), TimeUnit.MILLISECONDS);
+      pointBuilder.time(time, timeUnit);
+    }
+
+    for (String key : colNameAndFieldMap.keySet()) {
+      Field field = colNameAndFieldMap.get(key);
+      Column column = field.getAnnotation(Column.class);
+      String columnName = column.name();
+      Class<?> fieldType = field.getType();
+
+      if (!field.isAccessible()) {
+        field.setAccessible(true);
+      }
+
+      Object value = field.get(model);
+
+      if (column.nullable() && value == null) {
+        continue;
+      }
+
+      if (column.tag()) {
+        /** Tags are strings either way. */
+        pointBuilder.tag(columnName, value.toString());
+      } else if ("time".equals(columnName)) {
+        if (value != null) {
+          setTime(pointBuilder, fieldType, timeUnit, value);
+        }
+      } else if (includeFields) {
+        setField(pointBuilder, fieldType, columnName, value);
+      }
+    }
+
+    Point point = pointBuilder.build(includeFields);
+
+    return point;
   }
 
   private void setTime(
